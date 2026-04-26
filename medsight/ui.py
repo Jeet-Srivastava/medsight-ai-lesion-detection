@@ -275,16 +275,77 @@ def _inject_styles() -> None:
             padding: 0.8rem;
             background: #f8fbff;
             border: 1px solid rgba(43, 125, 233, 0.15);
+            border-radius: var(--ms-radius);
+            min-height: 560px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .ms-empty {
-            min-height: 520px;
+        .ms-feed-shell > * {
+            flex: 1;
+            width: 100%;
+        }
+
+        /* ensure Streamlit image widget fills the shell */
+        .ms-feed-shell [data-testid="stImage"] {
+            width: 100%;
+        }
+
+        .ms-feed-shell [data-testid="stImage"] img {
+            width: 100%;
+            height: auto;
+            border-radius: 12px;
+            display: block;
+        }
+
+        /* ── Idle / empty placeholder ─────────────────────────────────── */
+        .ms-feed-idle {
+            min-height: 540px;
+            width: 100%;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             text-align: center;
+            gap: 1.2rem;
+            border-radius: 14px;
+            background:
+                repeating-linear-gradient(
+                    -45deg,
+                    rgba(43, 125, 233, 0.03),
+                    rgba(43, 125, 233, 0.03) 10px,
+                    transparent 10px,
+                    transparent 20px
+                ),
+                linear-gradient(160deg, #f0f8ff 0%, #edfdf6 100%);
+            border: 2px dashed rgba(43, 125, 233, 0.22);
+        }
+
+        .ms-feed-idle-icon {
+            font-size: 3.2rem;
+            line-height: 1;
+            opacity: 0.55;
+        }
+
+        .ms-feed-idle-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--ms-accent-2);
+        }
+
+        .ms-feed-idle-hint {
+            font-size: 0.83rem;
             color: var(--ms-muted);
-            padding: 2rem;
+            max-width: 340px;
+            line-height: 1.65;
+        }
+
+        /* ── Feed outer wrapper — always occupies space ───────────────── */
+        .ms-feed-outer {
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 0.25rem;
         }
 
         /* ── Metrics grid ─────────────────────────────────────────────── */
@@ -485,7 +546,7 @@ def _render_dashboard_page() -> None:
         st.error(f"Model load failed: {load_error}")
         return
 
-    left_col, right_col = st.columns([1.9, 1], gap="large")
+    left_col, right_col = st.columns([2.4, 1], gap="large")
     with left_col:
         _render_left_panel(pipeline, controls)
     with right_col:
@@ -606,18 +667,39 @@ def _get_pipeline(detector: LesionDetector | None, controls: dict) -> MedSightPi
 
 
 def _render_left_panel(pipeline: MedSightPipeline | None, controls: dict) -> None:
-    st.markdown('<div class="ms-panel-title">Live Feed</div>', unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="ms-panel" style="margin-bottom:0.6rem; padding-bottom:0.5rem;">
+            <div class="ms-panel-title" style="margin-bottom:0;">🎥 Live Feed</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    # Always wrap feed in an outer div so the section never collapses
+    st.markdown('<div class="ms-feed-outer">', unsafe_allow_html=True)
     if pipeline is None:
-        st.error("Pipeline is unavailable.")
-        return
-
-    if controls["source_mode"] == "Image":
+        st.markdown(
+            _idle_placeholder_html("Model Unavailable", "The YOLOv8 model could not be loaded. Check the model path."),
+            unsafe_allow_html=True,
+        )
+    elif controls["source_mode"] == "Image":
         _render_image_feed(pipeline, controls)
     else:
         _render_stream_feed(pipeline, controls)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     _render_pipeline_metrics()
     _render_pipeline_map()
+
+
+def _idle_placeholder_html(title: str, hint: str) -> str:
+    return (
+        f'<div class="ms-feed-idle">'
+        f'<div class="ms-feed-idle-icon">🩺</div>'
+        f'<div class="ms-feed-idle-title">{title}</div>'
+        f'<div class="ms-feed-idle-hint">{hint}</div>'
+        f'</div>'
+    )
 
 
 def _render_right_panel(pipeline: MedSightPipeline | None) -> None:
@@ -630,7 +712,13 @@ def _render_right_panel(pipeline: MedSightPipeline | None) -> None:
 def _render_image_feed(pipeline: MedSightPipeline, controls: dict) -> None:
     image_path = controls["uploaded_image_path"]
     if not image_path:
-        st.markdown('<div class="ms-feed-shell"><div class="ms-empty">Upload an image and press Start Analysis.</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            _idle_placeholder_html(
+                "Waiting for Image",
+                "Upload a medical image in the sidebar, then press Start Analysis to begin detection.",
+            ),
+            unsafe_allow_html=True,
+        )
         return
 
     latest_result = st.session_state.latest_result
@@ -642,7 +730,10 @@ def _render_image_feed(pipeline: MedSightPipeline, controls: dict) -> None:
 
     latest_result = st.session_state.latest_result
     if latest_result is None:
-        st.warning("No image result is available yet.")
+        st.markdown(
+            _idle_placeholder_html("Processing…", "Inference in progress — results will appear momentarily."),
+            unsafe_allow_html=True,
+        )
         return
 
     st.markdown('<div class="ms-feed-shell">', unsafe_allow_html=True)
@@ -653,8 +744,14 @@ def _render_image_feed(pipeline: MedSightPipeline, controls: dict) -> None:
 @st.fragment(run_every=FRAGMENT_INTERVAL)
 def _render_stream_feed(pipeline: MedSightPipeline, controls: dict) -> None:
     if not st.session_state.run_stream:
+        source_label = controls["source_mode"]
+        hint_map = {
+            "Video": "Upload a video file in the sidebar, then press Start Analysis to begin real-time detection.",
+            "Webcam": "Grant webcam access in your browser, then press Start Analysis to begin live detection.",
+        }
+        hint = hint_map.get(source_label, "Select a source and press Start Analysis.")
         st.markdown(
-            '<div class="ms-feed-shell"><div class="ms-empty">Select a video or webcam source and press Start Analysis.</div></div>',
+            _idle_placeholder_html(f"{source_label} Feed Ready", hint),
             unsafe_allow_html=True,
         )
         return
@@ -664,14 +761,20 @@ def _render_stream_feed(pipeline: MedSightPipeline, controls: dict) -> None:
         st.session_state.run_stream = False
         st.session_state.source_error = error
         _add_log("warn", error)
-        st.error(error)
+        st.markdown(
+            _idle_placeholder_html("Source Error", error),
+            unsafe_allow_html=True,
+        )
         return
 
     frame_rgb = stream.read_frame()
     if frame_rgb is None:
         st.session_state.run_stream = False
         _add_log("warn", "Stream ended")
-        st.warning("Stream ended. Reset or restart analysis to continue.")
+        st.markdown(
+            _idle_placeholder_html("Stream Ended", "All frames processed. Press Reset Session or Start Analysis again to continue."),
+            unsafe_allow_html=True,
+        )
         return
 
     st.session_state.frame_count += 1
@@ -873,7 +976,7 @@ def _render_analytics_panel(pipeline: MedSightPipeline | None) -> None:
 
         track_df = build_track_dataframe(pipeline.tracker.snapshot())
         if not track_df.empty:
-            st.dataframe(track_df, use_container_width=True, hide_index=True)
+            st.dataframe(track_df, width="stretch", hide_index=True)
     else:
         st.caption("Analytics will populate after the first processed frame.")
 
