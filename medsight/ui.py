@@ -270,37 +270,44 @@ def _inject_styles() -> None:
             font-weight: 700;
         }
 
-        /* ── Video / image feed ───────────────────────────────────────── */
+        /* ── Video / image feed — fixed size, never distorts ─────────── */
         .ms-feed-shell {
-            padding: 0.8rem;
+            /* FIXED height — must match .ms-feed-idle height exactly */
+            height: 480px;
+            overflow: hidden;
+            padding: 0.5rem;
             background: #f8fbff;
             border: 1px solid rgba(43, 125, 233, 0.15);
             border-radius: var(--ms-radius);
-            min-height: 560px;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
-        .ms-feed-shell > * {
-            flex: 1;
-            width: 100%;
-        }
-
-        /* ensure Streamlit image widget fills the shell */
+        /* Streamlit injects extra wrappers — flatten them */
+        .ms-feed-shell > div,
         .ms-feed-shell [data-testid="stImage"] {
             width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
+        /* The actual <img>: constrained, never stretched or squished */
         .ms-feed-shell [data-testid="stImage"] img {
-            width: 100%;
+            max-width:  100%;
+            max-height: 460px;
+            width:  auto;
             height: auto;
-            border-radius: 12px;
+            object-fit: contain;
+            border-radius: 10px;
             display: block;
         }
 
-        /* ── Idle / empty placeholder ─────────────────────────────────── */
+        /* ── Idle / empty placeholder — SAME height as ms-feed-shell ─── */
         .ms-feed-idle {
-            min-height: 540px;
+            height: 480px;          /* keep in sync with ms-feed-shell */
             width: 100%;
             display: flex;
             flex-direction: column;
@@ -308,7 +315,7 @@ def _inject_styles() -> None:
             justify-content: center;
             text-align: center;
             gap: 1.2rem;
-            border-radius: 14px;
+            border-radius: var(--ms-radius);
             background:
                 repeating-linear-gradient(
                     -45deg,
@@ -340,12 +347,9 @@ def _inject_styles() -> None:
             line-height: 1.65;
         }
 
-        /* ── Feed outer wrapper — always occupies space ───────────────── */
+        /* ── Feed outer wrapper ─────────────────────────────────────────── */
         .ms-feed-outer {
-            min-height: 600px;
-            display: flex;
-            flex-direction: column;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.5rem;
         }
 
         /* ── Metrics grid ─────────────────────────────────────────────── */
@@ -737,7 +741,7 @@ def _render_image_feed(pipeline: MedSightPipeline, controls: dict) -> None:
         return
 
     st.markdown('<div class="ms-feed-shell">', unsafe_allow_html=True)
-    st.image(latest_result.rendered_frame, channels="RGB", width="stretch")
+    st.image(latest_result.rendered_frame, channels="RGB", width=640)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -786,7 +790,7 @@ def _render_stream_feed(pipeline: MedSightPipeline, controls: dict) -> None:
     )
     _store_result(result)
     st.markdown('<div class="ms-feed-shell">', unsafe_allow_html=True)
-    st.image(result.rendered_frame, channels="RGB", width="stretch")
+    st.image(result.rendered_frame, channels="RGB", width=640)
     st.markdown("</div>", unsafe_allow_html=True)
 
 
