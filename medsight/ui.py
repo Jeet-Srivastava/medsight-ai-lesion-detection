@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import base64
+import io
 from collections import deque
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
+from PIL import Image
 
 from medsight.analytics import build_track_dataframe
 from medsight.config import (
@@ -284,18 +288,8 @@ def _inject_styles() -> None:
             justify-content: center;
         }
 
-        /* Streamlit injects extra wrappers — flatten them */
-        .ms-feed-shell > div,
-        .ms-feed-shell [data-testid="stImage"] {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* The actual <img>: constrained, never stretched or squished */
-        .ms-feed-shell [data-testid="stImage"] img {
+        /* The <img> is now embedded directly in the HTML — plain selector */
+        .ms-feed-shell img {
             max-width:  100%;
             max-height: 460px;
             width:  auto;
@@ -303,6 +297,7 @@ def _inject_styles() -> None:
             object-fit: contain;
             border-radius: 10px;
             display: block;
+            margin: auto;
         }
 
         /* ── Idle / empty placeholder — SAME height as ms-feed-shell ─── */
@@ -706,6 +701,27 @@ def _idle_placeholder_html(title: str, hint: str) -> str:
     )
 
 
+def _frame_to_data_url(frame_rgb: np.ndarray, quality: int = 82) -> str:
+    """Convert an RGB numpy frame to a JPEG data-URL for inline HTML embedding."""
+    img = Image.fromarray(frame_rgb)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=quality)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/jpeg;base64,{b64}"
+
+
+def _feed_shell_html(frame_rgb: np.ndarray) -> str:
+    """Return the complete ms-feed-shell div with the frame embedded as a data-URL.
+    Everything is in ONE string so the browser sees proper parent/child HTML.
+    """
+    data_url = _frame_to_data_url(frame_rgb)
+    return (
+        '<div class="ms-feed-shell">'
+        f'<img src="{data_url}" alt="Live feed frame">'
+        '</div>'
+    )
+
+
 def _render_right_panel(pipeline: MedSightPipeline | None) -> None:
     _render_analytics_panel(pipeline)
     _render_logs_panel()
@@ -740,9 +756,7 @@ def _render_image_feed(pipeline: MedSightPipeline, controls: dict) -> None:
         )
         return
 
-    st.markdown('<div class="ms-feed-shell">', unsafe_allow_html=True)
-    st.image(latest_result.rendered_frame, channels="RGB", width=640)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(_feed_shell_html(latest_result.rendered_frame), unsafe_allow_html=True)
 
 
 @st.fragment(run_every=FRAGMENT_INTERVAL)
@@ -789,9 +803,7 @@ def _render_stream_feed(pipeline: MedSightPipeline, controls: dict) -> None:
         confidence=controls["confidence"],
     )
     _store_result(result)
-    st.markdown('<div class="ms-feed-shell">', unsafe_allow_html=True)
-    st.image(result.rendered_frame, channels="RGB", width=640)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(_feed_shell_html(result.rendered_frame), unsafe_allow_html=True)
 
 
 def _get_active_stream(controls: dict) -> tuple[VideoStream | None, str | None]:
