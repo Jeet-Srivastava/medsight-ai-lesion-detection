@@ -92,30 +92,33 @@ def _inject_styles() -> None:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
+        /* ── Light Healthcare Theme ─────────────────────────────────────── */
         :root {
-            --ms-bg: #07111f;
-            --ms-panel: rgba(10, 23, 38, 0.88);
-            --ms-panel-strong: rgba(13, 30, 48, 0.96);
-            --ms-border: rgba(127, 156, 186, 0.20);
-            --ms-text: #edf5ff;
-            --ms-muted: #8da6c1;
-            --ms-accent: #4cd7b2;
-            --ms-accent-2: #6cb7ff;
-            --ms-danger: #ff6b81;
-            --ms-warning: #ffcb69;
-            --ms-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
-            --ms-radius: 20px;
+            --ms-bg:           #f0f7ff;
+            --ms-panel:        rgba(255, 255, 255, 0.92);
+            --ms-panel-strong: rgba(255, 255, 255, 0.98);
+            --ms-border:       rgba(99, 179, 237, 0.28);
+            --ms-text:         #1a2f4a;
+            --ms-muted:        #5a7a9a;
+            --ms-accent:       #0ea87a;
+            --ms-accent-2:     #2b7de9;
+            --ms-danger:       #e53e3e;
+            --ms-warning:      #d97706;
+            --ms-shadow:       0 8px 32px rgba(43, 125, 233, 0.10);
+            --ms-radius:       20px;
         }
 
         * {
             font-family: 'Space Grotesk', sans-serif !important;
         }
 
+        /* ── Main canvas ──────────────────────────────────────────────── */
         [data-testid="stAppViewContainer"] {
             background:
-                radial-gradient(circle at 0% 0%, rgba(76, 215, 178, 0.14), transparent 25%),
-                radial-gradient(circle at 100% 0%, rgba(108, 183, 255, 0.16), transparent 24%),
-                linear-gradient(180deg, #040b14 0%, var(--ms-bg) 100%);
+                radial-gradient(circle at 5%  8%,  rgba(14, 168, 122, 0.10), transparent 30%),
+                radial-gradient(circle at 95% 5%,  rgba(43, 125, 233, 0.12), transparent 28%),
+                radial-gradient(circle at 50% 95%, rgba(255, 214, 102, 0.08), transparent 30%),
+                linear-gradient(160deg, #e8f4ff 0%, #f5fbff 45%, #edfdf6 100%);
             color: var(--ms-text);
         }
 
@@ -123,9 +126,11 @@ def _inject_styles() -> None:
             background: transparent;
         }
 
+        /* ── Sidebar ──────────────────────────────────────────────────── */
         [data-testid="stSidebar"] {
-            background: rgba(5, 14, 25, 0.94);
-            border-right: 1px solid var(--ms-border);
+            background: linear-gradient(180deg, #ffffff 0%, #f0f8ff 100%);
+            border-right: 1px solid rgba(43, 125, 233, 0.15);
+            box-shadow: 2px 0 16px rgba(43, 125, 233, 0.06);
         }
 
         [data-testid="stSidebarCollapseButton"],
@@ -142,11 +147,12 @@ def _inject_styles() -> None:
             width: 2.45rem;
             height: 2.45rem;
             border-radius: 999px;
-            border: 1px solid rgba(108, 183, 255, 0.18);
-            background: rgba(5, 14, 25, 0.94);
+            border: 1px solid rgba(43, 125, 233, 0.22);
+            background: #ffffff;
             color: transparent !important;
             min-height: 2.45rem;
             padding: 0;
+            box-shadow: 0 2px 8px rgba(43, 125, 233, 0.12);
         }
 
         [data-testid="stSidebarCollapseButton"] button *,
@@ -163,7 +169,7 @@ def _inject_styles() -> None:
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #d9ecff;
+            color: #2b7de9;
             font-size: 1.15rem;
             line-height: 1;
         }
@@ -182,6 +188,7 @@ def _inject_styles() -> None:
             padding-bottom: 2rem;
         }
 
+        /* ── Card surfaces ────────────────────────────────────────────── */
         .ms-home-shell,
         .ms-panel,
         .ms-feed-shell,
@@ -194,13 +201,16 @@ def _inject_styles() -> None:
             box-shadow: var(--ms-shadow);
         }
 
+        /* ── Hero / Home shell ────────────────────────────────────────── */
         .ms-home-shell {
             padding: 3rem;
             margin-bottom: 1.25rem;
             background:
-                linear-gradient(135deg, rgba(76, 215, 178, 0.08), transparent 35%),
-                linear-gradient(225deg, rgba(108, 183, 255, 0.08), transparent 35%),
+                linear-gradient(135deg, rgba(14, 168, 122, 0.07), transparent 40%),
+                linear-gradient(225deg, rgba(43, 125, 233, 0.07), transparent 40%),
                 var(--ms-panel-strong);
+            border: 1px solid rgba(43, 125, 233, 0.18);
+            box-shadow: 0 12px 40px rgba(43, 125, 233, 0.10);
         }
 
         .ms-kicker {
@@ -216,7 +226,10 @@ def _inject_styles() -> None:
             line-height: 1;
             margin: 0.8rem 0 1rem;
             font-weight: 700;
-            color: var(--ms-text);
+            background: linear-gradient(120deg, #1a3a6e 0%, #2b7de9 50%, #0ea87a 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .ms-subtitle {
@@ -234,20 +247,22 @@ def _inject_styles() -> None:
         }
 
         .ms-badge {
-            border: 1px solid rgba(108, 183, 255, 0.25);
+            border: 1px solid rgba(43, 125, 233, 0.25);
             border-radius: 999px;
             padding: 0.45rem 0.9rem;
-            color: #d9ecff;
-            background: rgba(108, 183, 255, 0.08);
+            color: #1a4a8a;
+            background: rgba(43, 125, 233, 0.08);
             font-size: 0.82rem;
+            font-weight: 500;
         }
 
+        /* ── Generic panel ────────────────────────────────────────────── */
         .ms-panel {
             padding: 1rem 1rem 1.15rem;
         }
 
         .ms-panel-title {
-            color: var(--ms-muted);
+            color: var(--ms-accent-2);
             text-transform: uppercase;
             letter-spacing: 0.15em;
             font-size: 0.72rem;
@@ -255,9 +270,11 @@ def _inject_styles() -> None:
             font-weight: 700;
         }
 
+        /* ── Video / image feed ───────────────────────────────────────── */
         .ms-feed-shell {
             padding: 0.8rem;
-            background: rgba(3, 10, 18, 0.95);
+            background: #f8fbff;
+            border: 1px solid rgba(43, 125, 233, 0.15);
         }
 
         .ms-empty {
@@ -270,6 +287,7 @@ def _inject_styles() -> None:
             padding: 2rem;
         }
 
+        /* ── Metrics grid ─────────────────────────────────────────────── */
         .ms-metric-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -278,6 +296,8 @@ def _inject_styles() -> None:
 
         .ms-stat-card {
             padding: 0.9rem 1rem;
+            background: linear-gradient(135deg, #f0f7ff, #ffffff);
+            border: 1px solid rgba(43, 125, 233, 0.14);
         }
 
         .ms-stat-label {
@@ -294,22 +314,24 @@ def _inject_styles() -> None:
             margin-top: 0.35rem;
         }
 
+        /* ── AI Logs ──────────────────────────────────────────────────── */
         .ms-log-shell {
             padding: 1rem;
-            background: rgba(2, 8, 15, 0.95);
+            background: #f5faff;
+            border: 1px solid rgba(43, 125, 233, 0.12);
         }
 
         .ms-log-line {
             font-family: 'IBM Plex Mono', monospace !important;
             font-size: 0.76rem;
             margin: 0 0 0.45rem;
-            color: #cae0ff;
+            color: #2b4a6e;
         }
 
-        .ms-info { color: #9ad7ff; }
-        .ms-detect { color: #79f1b8; }
-        .ms-track { color: #d6c2ff; }
-        .ms-warn { color: #ffd27f; }
+        .ms-info   { color: #2b7de9; }
+        .ms-detect { color: #0ea87a; }
+        .ms-track  { color: #7c5cbf; }
+        .ms-warn   { color: #d97706; }
 
         .ms-small-note {
             color: var(--ms-muted);
@@ -317,22 +339,61 @@ def _inject_styles() -> None:
             line-height: 1.7;
         }
 
+        /* ── Buttons ──────────────────────────────────────────────────── */
         .stButton > button {
             border-radius: 14px;
             height: 2.9rem;
             font-weight: 700;
-            border: 1px solid rgba(108, 183, 255, 0.18);
-            background: linear-gradient(135deg, rgba(76, 215, 178, 0.95), rgba(108, 183, 255, 0.95));
-            color: #04111e;
+            border: 1px solid rgba(43, 125, 233, 0.22);
+            background: linear-gradient(135deg, #0ea87a, #2b7de9);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(43, 125, 233, 0.20);
+            transition: box-shadow 0.18s ease, transform 0.14s ease;
         }
 
         .stButton > button:hover {
-            border-color: rgba(108, 183, 255, 0.35);
-            color: #04111e;
+            border-color: rgba(43, 125, 233, 0.40);
+            color: #ffffff;
+            box-shadow: 0 6px 20px rgba(43, 125, 233, 0.28);
+            transform: translateY(-1px);
         }
 
         .stMetric {
             background: transparent;
+        }
+
+        /* ── Streamlit native element overrides for light mode ─────────── */
+        [data-testid="stMarkdownContainer"] p,
+        [data-testid="stMarkdownContainer"] li {
+            color: var(--ms-text);
+        }
+
+        [data-testid="stSidebar"] label,
+        [data-testid="stSidebar"] .stRadio label,
+        [data-testid="stSidebar"] .stSlider label,
+        [data-testid="stSidebar"] p,
+        [data-testid="stSidebar"] span {
+            color: #1a2f4a !important;
+        }
+
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3 {
+            color: #1a2f4a !important;
+        }
+
+        [data-testid="metric-container"] label {
+            color: var(--ms-muted) !important;
+        }
+
+        [data-testid="metric-container"] [data-testid="stMetricValue"] {
+            color: var(--ms-text) !important;
+        }
+
+        /* ── Snapshot card ─────────────────────────────────────────────── */
+        .ms-snapshot-card {
+            background: linear-gradient(135deg, #f0f8ff, #edfdf6);
+            border: 1px solid rgba(14, 168, 122, 0.20);
         }
 
         @media (max-width: 900px) {
