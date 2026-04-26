@@ -6,5 +6,7 @@ env/
 .DS_Store
 runs/
 models/*.pt
+models/*.onnx
 .streamlit/
 uploads/
+.ultralytics/
