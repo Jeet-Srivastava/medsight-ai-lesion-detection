@@ -1,7 +1,11 @@
 streamlit>=1.44,<2.0
+# opencv-python-headless must stay explicit: ultralytics also pulls opencv-python
+# (full build) which requires libGL.so.1. packages.txt installs that system lib,
+# but pinning headless here ensures the headless wheel is preferred by the resolver.
 opencv-python-headless>=4.9,<5.0
 ultralytics>=8.3,<9.0
 numpy>=1.26,<3.0
 pandas>=2.2,<3.0
+pillow>=10.0,<13.0
 onnx>=1.16,<2.0
 onnxruntime>=1.18,<2.0
