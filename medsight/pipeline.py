@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-import cv2
 import numpy as np
 
 from medsight.analytics import FrameAnalytics, LesionAnalytics
@@ -132,6 +131,8 @@ class MedSightPipeline:
         )
 
     def _preprocess(self, frame_rgb: np.ndarray) -> np.ndarray:
+        import cv2
+
         lab = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))

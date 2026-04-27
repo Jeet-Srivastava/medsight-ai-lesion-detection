@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-import cv2
 import numpy as np
 import torch
 
@@ -82,6 +81,8 @@ class LesionDetector:
         )
 
     def render(self, frame_rgb: np.ndarray, detections: list[Detection]) -> np.ndarray:
+        import cv2
+
         canvas = frame_rgb.copy()
         for detection in detections:
             x1, y1, x2, y2 = detection.bbox

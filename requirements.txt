@@ -1,11 +1,21 @@
 streamlit>=1.44,<2.0
-# opencv-python-headless must stay explicit: ultralytics also pulls opencv-python
-# (full build) which requires libGL.so.1. packages.txt installs that system lib,
-# but pinning headless here ensures the headless wheel is preferred by the resolver.
+# Force opencv-python-headless so the full OpenCV build does not require libGL.
+# Ultralytics depends on opencv-python, so install ultralytics without deps and provide
+the runtime dependencies explicitly.
 opencv-python-headless>=4.9,<5.0
-ultralytics>=8.3,<9.0
+torch==2.11.0
+torchvision==0.26.0
+scipy==1.17.1
+matplotlib==3.10.9
+requests==2.33.1
+pyyaml==6.0.3
+psutil==7.2.2
+polars==1.40.1
+ultralytics-thop==2.0.19
 numpy>=1.26,<3.0
 pandas>=2.2,<3.0
 pillow>=10.0,<13.0
 onnx>=1.16,<2.0
 onnxruntime>=1.18,<2.0
+--no-deps
+ultralytics>=8.3,<9.0

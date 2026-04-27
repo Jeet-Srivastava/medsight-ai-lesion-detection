@@ -3,12 +3,13 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import cv2
 import numpy as np
 
 
 class VideoStream:
     def __init__(self, source: int | str, loop_video: bool = False) -> None:
+        import cv2
+
         self.source = source
         self.loop_video = loop_video
         self.capture = cv2.VideoCapture(source)
@@ -19,6 +20,8 @@ class VideoStream:
         return bool(self.capture and self.capture.isOpened())
 
     def read_frame(self) -> np.ndarray | None:
+        import cv2
+
         if not self.is_opened():
             return None
         ok, frame_bgr = self.capture.read()
@@ -47,6 +50,8 @@ def save_uploaded_file(uploaded_file, upload_dir: str) -> str:
 
 
 def decode_uploaded_image(image_path: str) -> np.ndarray:
+    import cv2
+
     image_bgr = cv2.imread(image_path)
     if image_bgr is None:
         raise ValueError(f"Unable to decode image: {image_path}")
