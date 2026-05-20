@@ -7,7 +7,7 @@ APP_DESCRIPTION = (
     "spatiotemporal tracking, analytics, and deployment benchmarking."
 )
 
-DEFAULT_MODEL_PATH = "yolov8n.pt"
+DEFAULT_MODEL_PATH = "yolo11n.pt"
 DEFAULT_CONFIDENCE = 0.35
 DEFAULT_TEMPORAL_WINDOW = 3
 

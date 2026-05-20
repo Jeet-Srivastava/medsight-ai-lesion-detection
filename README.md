@@ -1,10 +1,10 @@
 # MedSight AI
 
-MedSight AI is a Streamlit-based computer vision prototype for real-time lesion candidate detection, spatiotemporal tracking, analytics, and model optimization. It uses a pretrained YOLOv8 model to simulate a clinical-grade workflow across image uploads, recorded video, and optional webcam input.
+MedSight AI is a Streamlit-based computer vision prototype for real-time lesion candidate detection, spatiotemporal tracking, analytics, and model optimization. It uses a pretrained YOLO11 model to simulate a clinical-grade workflow across image uploads, recorded video, and optional webcam input.
 
 ## Features
 
-- YOLOv8 image and video inference with confidence overlays
+- YOLO11 image and video inference with confidence overlays
 - ByteTrack / BoT-SORT tracking with persistent lesion IDs
 - Temporal consistency filtering to suppress flickering detections
 - Runtime analytics for total lesions, active lesions, average confidence, and detection frequency
@@ -48,4 +48,4 @@ The ONNX export flow depends on `onnx` and `onnxruntime`. If FP16 is supported b
 
 ## Disclaimer
 
-This project is a software engineering and computer vision prototype. The included YOLOv8 checkpoint is not a medically trained lesion model and must not be used for clinical diagnosis.
+This project is a software engineering and computer vision prototype. The included YOLO11 checkpoint is not a medically trained lesion model and must not be used for clinical diagnosis.

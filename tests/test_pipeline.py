@@ -11,7 +11,7 @@ from medsight.pipeline import MedSightPipeline
 class PipelineIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.detector = LesionDetector("yolov8n.pt")
+        cls.detector = LesionDetector("yolo11n.pt")
 
     def test_image_pipeline_returns_metrics(self) -> None:
         pipeline = MedSightPipeline(

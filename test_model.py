@@ -7,7 +7,7 @@ from medsight.pipeline import MedSightPipeline
 
 
 def main() -> None:
-    detector = LesionDetector("yolov8n.pt")
+    detector = LesionDetector("yolo11n.pt")
     pipeline = MedSightPipeline(
         detector=detector,
         temporal_window=2,

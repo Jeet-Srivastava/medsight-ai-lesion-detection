@@ -13,14 +13,14 @@ class OptimizationTests(unittest.TestCase):
     def test_optimizer_reports_latency(self, mock_yolo) -> None:
         mock_detector = MagicMock()
         mock_detector.fp16_supported = False
-        mock_detector.model.export.return_value = "models/yolov8n.onnx"
+        mock_detector.model.export.return_value = "models/yolo11n.onnx"
         mock_detector.benchmark.return_value = 12.0
 
         mock_onnx_model = MagicMock()
         mock_yolo.return_value = mock_onnx_model
         mock_onnx_model.predict.return_value = []
 
-        optimizer = ModelOptimizer("yolov8n.pt")
+        optimizer = ModelOptimizer("yolo11n.pt")
         result = optimizer.optimize(mock_detector, sample_frame=np.zeros((16, 16, 3), dtype=np.uint8))
 
         self.assertIsNone(result.error)

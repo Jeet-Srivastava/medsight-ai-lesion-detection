@@ -479,7 +479,7 @@ def _render_home_page() -> None:
             <p class="ms-subtitle">{APP_SUBTITLE}</p>
             <p class="ms-subtitle">{APP_DESCRIPTION}</p>
             <div class="ms-badge-row">
-                <span class="ms-badge">YOLOv8 detection</span>
+                <span class="ms-badge">YOLO11 detection</span>
                 <span class="ms-badge">ByteTrack / BoT-SORT tracking</span>
                 <span class="ms-badge">Temporal consistency filter</span>
                 <span class="ms-badge">ONNX export + latency benchmark</span>
@@ -600,7 +600,7 @@ def _render_sidebar(model_ready: bool) -> dict:
         export_clicked = st.button("Export ONNX + Benchmark", use_container_width=True, disabled=not model_ready)
 
         st.markdown("---")
-        st.caption("This prototype uses a general YOLOv8 pretrained detector and presents detections as lesion candidates for workflow simulation only.")
+        st.caption("This prototype uses a general YOLO11 pretrained detector and presents detections as lesion candidates for workflow simulation only.")
 
     return {
         "source_mode": source_mode,
@@ -678,7 +678,7 @@ def _render_left_panel(pipeline: MedSightPipeline | None, controls: dict) -> Non
     st.markdown('<div class="ms-feed-outer">', unsafe_allow_html=True)
     if pipeline is None:
         st.markdown(
-            _idle_placeholder_html("Model Unavailable", "The YOLOv8 model could not be loaded. Check the model path."),
+            _idle_placeholder_html("Model Unavailable", "The YOLO11 model could not be loaded. Check the model path."),
             unsafe_allow_html=True,
         )
     elif controls["source_mode"] == "Image":
@@ -965,7 +965,7 @@ def _render_pipeline_map() -> None:
         video/image input
           -> frame extraction
           -> preprocessing
-          -> YOLOv8 inference
+          -> YOLO11 inference
           -> ByteTrack / BoT-SORT association
           -> temporal consistency filter
           -> analytics + snapshots + rendering
@@ -1067,7 +1067,7 @@ def _add_log(level: str, message: str) -> None:
     st.session_state.logs.append((level, message))
 
 
-@st.cache_resource(show_spinner="Loading YOLOv8 model...")
+@st.cache_resource(show_spinner="Loading YOLO11 model...")
 def _get_detector(model_path: str) -> LesionDetector:
     return LesionDetector(model_path)
 

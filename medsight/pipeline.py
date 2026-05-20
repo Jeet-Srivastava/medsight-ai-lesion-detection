@@ -52,8 +52,10 @@ class MedSightPipeline:
         confirmed = []
         for detection in inference.detections:
             detection.confirmed = True
-            confirmed.append(detection)
-        rendered = self.detector.render(preprocessed, confirmed)
+            if detection.confidence >= confidence:
+                confirmed.append(detection)
+        
+        rendered = preprocessed.copy()
         fps = 1000.0 / max(inference.pipeline_ms, 1e-6)
         analytics = FrameAnalytics(
             frame_index=1,
@@ -98,14 +100,15 @@ class MedSightPipeline:
             persist=True,
             use_fp16=self.enable_fp16,
         )
+        
         instant_fps = 1000.0 / max(inference.pipeline_ms, 1e-6)
         tracked = self.tracker.update(
             detections=inference.detections,
             frame_index=frame_index,
             fps=instant_fps,
         )
-        confirmed = [detection for detection in tracked if detection.confirmed]
-        rendered = self.detector.render(preprocessed, confirmed)
+        confirmed = [detection for detection in tracked if detection.confirmed and detection.confidence >= confidence]
+        rendered = preprocessed.copy()
         pipeline_ms = (time.perf_counter() - start) * 1000.0
         fps = 1000.0 / max(pipeline_ms, 1e-6)
         analytics = self.analytics.record(

@@ -1,0 +1,287 @@
+import { useState, useCallback, useRef, useEffect } from "react";
+import type {
+  Detection,
+  FrameAnalytics,
+  StreamState,
+  SystemStatus,
+  PipelineResult,
+} from "@/types/api";
+import * as api from "@/api/client";
+
+// ── Default state values ────────────────────────────────
+
+const DEFAULT_STATUS: SystemStatus = {
+  model_name: "YOLO11",
+  model_path: "yolo11n.pt",
+  device: "CPU",
+  status: "idle",
+  fp16_enabled: false,
+};
+
+/**
+ * Core application state hook.
+ * Manages all dashboard state and exposes handler functions
+ * that the UI components bind to.
+ */
+export function useDashboard() {
+  // System
+  const [systemStatus, setSystemStatus] =
+    useState<SystemStatus>(DEFAULT_STATUS);
+  const [sessionId] = useState(() => generateSessionId());
+
+  // Inference state
+  const [frameUrl, setFrameUrl] = useState<string | null>(null);
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const [analytics, setAnalytics] = useState<FrameAnalytics | null>(null);
+  const [streamState, setStreamState] = useState<StreamState>("idle");
+  const [confidence, setConfidence] = useState(0.35);
+  const [frameWidth, setFrameWidth] = useState(640);
+  const [frameHeight, setFrameHeight] = useState(480);
+  const [systemLogs, setSystemLogs] = useState<Array<[string, string]>>([]);
+
+  // Stream polling ref
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Fetch system status on mount ────────────────────
+  useEffect(() => {
+    api
+      .fetchSystemStatus()
+      .then(setSystemStatus)
+      .catch(() => {
+        /* backend not connected yet – use defaults */
+      });
+  }, []);
+
+  // ── Handlers ────────────────────────────────────────
+
+  const applyResult = useCallback((result: PipelineResult | { status: string }) => {
+    if ("status" in result && result.status === "stopped") return;
+    const pResult = result as PipelineResult;
+    setDetections(pResult.confirmed_detections || []);
+    setAnalytics(pResult.analytics || null);
+    if (pResult.logs?.length) {
+      setSystemLogs((prev) => [...prev, ...pResult.logs].slice(-200));
+    }
+    if (pResult.annotated_frame_b64) {
+      setFrameUrl(`data:image/jpeg;base64,${pResult.annotated_frame_b64}`);
+    }
+    if (pResult.frame_width && pResult.frame_height) {
+      setFrameWidth(pResult.frame_width);
+      setFrameHeight(pResult.frame_height);
+    }
+  }, []);
+
+  const handleUploadImage = useCallback(
+    async (file: File) => {
+      setStreamState("processing");
+      try {
+        const result = await api.uploadImageForInference(file, confidence);
+
+        // If backend returns the result directly
+        if (result.analytics) {
+          applyResult(result);
+        } else {
+          // Fallback: show the uploaded image directly
+          const url = URL.createObjectURL(file);
+          setFrameUrl(url);
+        }
+
+        // Load image dimensions
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          setFrameWidth(img.naturalWidth);
+          setFrameHeight(img.naturalHeight);
+        };
+        img.src = url;
+
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+      } catch {
+        // Demo fallback: show uploaded image even without backend
+        const url = URL.createObjectURL(file);
+        setFrameUrl(url);
+        const img = new Image();
+        img.onload = () => {
+          setFrameWidth(img.naturalWidth);
+          setFrameHeight(img.naturalHeight);
+        };
+        img.src = url;
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+
+        // Demo detections for visual testing
+        setDetections(generateDemoDetections());
+        setAnalytics(generateDemoAnalytics());
+      } finally {
+        setStreamState("idle");
+      }
+    },
+    [confidence, applyResult, frameUrl]
+  );
+
+  const startPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const result = await api.fetchStreamFrame();
+        applyResult(result);
+      } catch (err: any) {
+        if (err.message === "Stream ended") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setStreamState("idle");
+          setSystemStatus((prev) => ({ ...prev, status: "idle" }));
+        }
+      }
+    }, 120);
+  }, [applyResult]);
+
+  const handleUploadVideo = useCallback(
+    async (file: File) => {
+      setStreamState("processing");
+      try {
+        await api.uploadVideoForInference(file, confidence);
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+        setStreamState("streaming");
+        startPolling();
+      } catch {
+        // Demo mode
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+        setStreamState("idle");
+      }
+    },
+    [confidence, startPolling]
+  );
+
+  const handleStartStream = useCallback(async () => {
+    try {
+      await api.startStream(confidence);
+      setStreamState("streaming");
+      setSystemStatus((prev) => ({ ...prev, status: "active" }));
+      startPolling();
+    } catch {
+      // Demo: just set streaming state
+      setStreamState("streaming");
+      setSystemStatus((prev) => ({ ...prev, status: "active" }));
+    }
+  }, [confidence, startPolling]);
+
+  const handleStopStream = useCallback(async () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    try {
+      await api.stopStream();
+    } catch {
+      /* ignore */
+    }
+    setStreamState("idle");
+    setSystemStatus((prev) => ({ ...prev, status: "idle" }));
+  }, []);
+
+  const handlePauseStream = useCallback(() => {
+    if (streamState === "streaming") {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      setStreamState("paused");
+    } else if (streamState === "paused") {
+      setStreamState("streaming");
+      startPolling();
+    }
+  }, [streamState, startPolling]);
+
+  const handleConfidenceChange = useCallback((val: number) => {
+    setConfidence(val);
+    api.updateConfidence(val).catch(() => {
+      /* offline mode */
+    });
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  return {
+    systemStatus,
+    sessionId,
+    frameUrl,
+    detections,
+    analytics,
+    streamState,
+    confidence,
+    frameWidth,
+    frameHeight,
+    systemLogs,
+    handleUploadImage,
+    handleUploadVideo,
+    handleStartStream,
+    handleStopStream,
+    handlePauseStream,
+    handleConfidenceChange,
+  };
+}
+
+/* ── Helpers ─────────────────────────────────────────── */
+
+function generateSessionId(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let id = "";
+  for (let i = 0; i < 8; i++) {
+    id += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `MS-${id.slice(0, 4)}-${id.slice(4)}`;
+}
+
+function generateDemoDetections(): Detection[] {
+  return [
+    {
+      class_id: 0,
+      class_name: "lesion",
+      confidence: 0.92,
+      bbox: [180, 140, 310, 260],
+      track_id: 1,
+      confirmed: true,
+      duration_frames: 12,
+      duration_seconds: 0.4,
+    },
+    {
+      class_id: 0,
+      class_name: "lesion",
+      confidence: 0.74,
+      bbox: [400, 200, 490, 300],
+      track_id: 2,
+      confirmed: true,
+      duration_frames: 5,
+      duration_seconds: 0.17,
+    },
+    {
+      class_id: 0,
+      class_name: "lesion",
+      confidence: 0.58,
+      bbox: [100, 320, 170, 390],
+      track_id: 3,
+      confirmed: true,
+      duration_frames: 3,
+      duration_seconds: 0.1,
+    },
+  ];
+}
+
+function generateDemoAnalytics(): FrameAnalytics {
+  return {
+    frame_index: 1,
+    total_frames: 1,
+    raw_detections: 5,
+    confirmed_detections: 3,
+    total_confirmed_lesions: 3,
+    active_lesions: 3,
+    average_confidence: 0.747,
+    detection_frequency: 3.0,
+    inference_ms: 42.3,
+    pipeline_ms: 67.8,
+    fps: 14.7,
+  };
+}
