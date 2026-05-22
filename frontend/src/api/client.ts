@@ -74,6 +74,18 @@ export async function fetchStreamFrame() {
   return res.json();
 }
 
+export async function sendClientFrame(blob: Blob, confidence: number) {
+  const formData = new FormData();
+  formData.append("file", blob, "frame.jpg");
+
+  const res = await fetch(`${BASE}/stream/client-frame?confidence=${confidence}`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) throw new Error("Failed to send client frame");
+  return res.json();
+}
+
 /* ── Confidence Update ───────────────────────────────── */
 
 export async function updateConfidence(confidence: number) {

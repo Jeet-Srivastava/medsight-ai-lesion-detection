@@ -47,6 +47,10 @@ export function useDashboard() {
 
   // Stream polling ref
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Media capture refs for browser camera streaming
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const captureRef = useRef<number | null>(null);
 
   // ── Fetch system status on mount ────────────────────
   useEffect(() => {
@@ -162,28 +166,106 @@ export function useDashboard() {
   );
 
   const handleStartStream = useCallback(async () => {
+    // Try browser camera first so the user can grant access in-browser.
     try {
-      await api.startStream(confidence);
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      mediaStreamRef.current = stream;
+
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+      video.srcObject = stream;
+      // Ensure play() resolves
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      video.play();
+      videoElRef.current = video;
+
       setStreamState("streaming");
       setSystemStatus((prev) => ({ ...prev, status: "active" }));
-      startPolling();
+
+      // Capture frames and POST to backend (reuses canvas, reduces resolution, backpressure)
+      const canvasEl = document.createElement("canvas");
+      const canvasCtx = canvasEl.getContext("2d");
+      const isSending = { value: false };
+
+      const captureLoop = async () => {
+        try {
+          const v = videoElRef.current;
+          if (!v || v.readyState < 2) return;
+          if (isSending.value) return;
+
+          const desiredW = 480;
+          const srcW = v.videoWidth || frameWidth;
+          const srcH = v.videoHeight || frameHeight;
+          const aspect = srcW && srcH ? srcW / srcH : (frameWidth / frameHeight);
+          const w = Math.min(desiredW, srcW || desiredW);
+          const h = Math.max(1, Math.round(w / aspect));
+
+          canvasEl.width = w;
+          canvasEl.height = h;
+          if (!canvasCtx) return;
+          canvasCtx.drawImage(v, 0, 0, w, h);
+
+          const blob: Blob | null = await new Promise((resolve) =>
+            canvasEl.toBlob((b) => resolve(b), "image/jpeg", 0.6)
+          );
+          if (!blob) return;
+
+          isSending.value = true;
+          try {
+            const result = await api.sendClientFrame(blob, confidence);
+            applyResult(result);
+          } catch {
+            /* ignore per-frame errors */
+          } finally {
+            isSending.value = false;
+          }
+        } catch {
+          /* ignore capture errors */
+        }
+      };
+
+      // Run capture at ~120ms intervals (but skip if previous still sending)
+      if (captureRef.current) clearInterval(captureRef.current as number);
+      captureRef.current = window.setInterval(captureLoop, 120);
     } catch {
-      // Demo: just set streaming state
-      setStreamState("streaming");
-      setSystemStatus((prev) => ({ ...prev, status: "active" }));
+      // Fallback: ask backend to use server webcam (existing behavior)
+      try {
+        await api.startStream(confidence);
+        setStreamState("streaming");
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+        startPolling();
+      } catch {
+        // Demo fallback
+        setStreamState("streaming");
+        setSystemStatus((prev) => ({ ...prev, status: "active" }));
+      }
     }
-  }, [confidence, startPolling]);
+  }, [confidence, frameWidth, frameHeight, startPolling, applyResult]);
 
   const handleStopStream = useCallback(async () => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
+    // Stop any client-side capture
+    if (captureRef.current) {
+      clearInterval(captureRef.current);
+      captureRef.current = null;
     }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
+    if (videoElRef.current) {
+      videoElRef.current.srcObject = null;
+      videoElRef.current = null;
+    }
+
+    // Stop server-side stream if any
     try {
       await api.stopStream();
     } catch {
       /* ignore */
     }
+
     setStreamState("idle");
     setSystemStatus((prev) => ({ ...prev, status: "idle" }));
   }, []);

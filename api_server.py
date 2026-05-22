@@ -285,6 +285,70 @@ def start_stream(req: StreamStartRequest):
     return {"status": "streaming"}
 
 
+@app.post("/api/stream/client-frame")
+async def client_frame(file: UploadFile = File(...), confidence: float = DEFAULT_CONFIDENCE):
+    """Accept a single frame uploaded from a browser client and process it.
+
+    This endpoint allows the frontend to capture the user's camera via the
+    browser and POST frames for server-side processing. It mirrors the
+    per-frame processing used by `get_stream_frame`.
+    """
+    global video_frame_index, video_total_frames, stream_active, last_result, last_frame_rgb
+
+    contents = await file.read()
+    nparr = np.frombuffer(contents, np.uint8)
+    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise HTTPException(status_code=400, detail="Invalid image frame")
+
+    frame_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+    # Mark stream active when client is sending frames
+    stream_active = True
+    video_frame_index += 1
+
+    pipe = get_pipeline()
+    result = pipe.process_video_frame(
+        frame_rgb,
+        frame_index=video_frame_index,
+        total_frames=video_total_frames,
+        confidence=confidence,
+    )
+
+    # Store for report generation and XAI
+    last_result = result
+    last_frame_rgb = frame_rgb
+
+    # Audit trail
+    _log_to_audit(result, frame_rgb)
+
+    # Build response dict but downscale the annotated frame to reduce payload
+    resp = pipeline_result_to_dict(result)
+
+    # Downscale rendered frame if present to keep bandwidth low for client streaming
+    try:
+        max_width = 640
+        rendered = result.rendered_frame
+        h, w = rendered.shape[:2]
+        if w > max_width:
+            scale = max_width / float(w)
+            new_w = int(w * scale)
+            new_h = int(h * scale)
+            resized = cv2.resize(rendered, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        else:
+            resized = rendered
+
+        # Encode resized RGB frame to base64 JPEG
+        frame_bgr = cv2.cvtColor(resized, cv2.COLOR_RGB2BGR)
+        _, buf = cv2.imencode('.jpg', frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        resp['annotated_frame_b64'] = base64.b64encode(buf.tobytes()).decode('utf-8')
+    except Exception:
+        # Fallback to original response if anything fails
+        pass
+
+    return resp
+
+
 @app.post("/api/stream/stop")
 def stop_stream():
     """Stop the active video/webcam stream."""
