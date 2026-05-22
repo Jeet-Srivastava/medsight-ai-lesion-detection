@@ -7,7 +7,7 @@
  * Wire these functions to your actual backend routes.
  */
 
-const BASE = "/api";
+const BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : "https://medsight-backend-0ue8.onrender.com/api");
 
 /* ── System ──────────────────────────────────────────── */
 
