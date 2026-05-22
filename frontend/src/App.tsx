@@ -1,6 +1,8 @@
 import { Header } from "@/components/Header";
 import { Viewport } from "@/components/Viewport";
 import { AnalyticsPanel } from "@/components/AnalyticsPanel";
+import { ABCDEPanel } from "@/components/ABCDEPanel";
+import { ReportPanel } from "@/components/ReportPanel";
 import { ControlBar } from "@/components/ControlBar";
 import { useDashboard } from "@/hooks/useDashboard";
 
@@ -16,12 +18,15 @@ export default function App() {
     frameWidth,
     frameHeight,
     systemLogs,
+    report,
+    reportLoading,
     handleUploadImage,
     handleUploadVideo,
     handleStartStream,
     handleStopStream,
     handlePauseStream,
     handleConfidenceChange,
+    handleGenerateReport,
   } = useDashboard();
 
   return (
@@ -40,12 +45,25 @@ export default function App() {
           frameHeight={frameHeight}
         />
 
-        {/* Analytics Sidebar */}
-        <AnalyticsPanel 
-          analytics={analytics} 
-          detections={detections} 
-          systemLogs={systemLogs} 
-        />
+        {/* Right Sidebar — scrollable stack of panels */}
+        <aside className="w-[320px] shrink-0 flex flex-col gap-3 overflow-y-auto">
+          {/* Existing analytics */}
+          <AnalyticsPanel 
+            analytics={analytics} 
+            detections={detections} 
+            systemLogs={systemLogs} 
+          />
+
+          {/* ABCDE Morphological Analysis */}
+          <ABCDEPanel detections={detections} />
+
+          {/* Clinical Report */}
+          <ReportPanel
+            report={report}
+            onGenerateReport={handleGenerateReport}
+            isLoading={reportLoading}
+          />
+        </aside>
       </main>
 
       {/* ── Control Bar ─────────────────────── */}

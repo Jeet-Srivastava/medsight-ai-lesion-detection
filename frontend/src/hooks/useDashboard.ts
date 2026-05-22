@@ -5,6 +5,7 @@ import type {
   StreamState,
   SystemStatus,
   PipelineResult,
+  ClinicalReport,
 } from "@/types/api";
 import * as api from "@/api/client";
 
@@ -39,6 +40,11 @@ export function useDashboard() {
   const [frameHeight, setFrameHeight] = useState(480);
   const [systemLogs, setSystemLogs] = useState<Array<[string, string]>>([]);
 
+  // Report & XAI state
+  const [report, setReport] = useState<ClinicalReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [saliencyUrl, setSaliencyUrl] = useState<string | null>(null);
+
   // Stream polling ref
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -69,6 +75,9 @@ export function useDashboard() {
       setFrameWidth(pResult.frame_width);
       setFrameHeight(pResult.frame_height);
     }
+    // Clear stale report when new inference arrives
+    setReport(null);
+    setSaliencyUrl(null);
   }, []);
 
   const handleUploadImage = useCallback(
@@ -197,6 +206,31 @@ export function useDashboard() {
     });
   }, []);
 
+  // ── Report & XAI handlers ─────────────────────────────
+
+  const handleGenerateReport = useCallback(async () => {
+    setReportLoading(true);
+    try {
+      const data = await api.fetchReport();
+      setReport(data);
+    } catch {
+      /* no report available yet */
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
+  const handleFetchSaliency = useCallback(async (index: number = 0) => {
+    try {
+      const data = await api.fetchSaliencyMap(index);
+      if (data.saliency_frame_b64) {
+        setSaliencyUrl(`data:image/jpeg;base64,${data.saliency_frame_b64}`);
+      }
+    } catch {
+      /* saliency not available */
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -215,12 +249,17 @@ export function useDashboard() {
     frameWidth,
     frameHeight,
     systemLogs,
+    report,
+    reportLoading,
+    saliencyUrl,
     handleUploadImage,
     handleUploadVideo,
     handleStartStream,
     handleStopStream,
     handlePauseStream,
     handleConfidenceChange,
+    handleGenerateReport,
+    handleFetchSaliency,
   };
 }
 

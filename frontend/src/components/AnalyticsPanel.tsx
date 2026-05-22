@@ -25,7 +25,7 @@ export function AnalyticsPanel({ analytics, detections, systemLogs = [] }: Analy
   const fps = analytics?.fps ?? 0;
 
   return (
-    <aside className="w-[320px] shrink-0 flex flex-col gap-3 overflow-y-auto">
+    <>
       {/* ── Lesion Count ────────────────────── */}
       <Card>
         <CardHeader>
@@ -165,7 +165,8 @@ export function AnalyticsPanel({ analytics, detections, systemLogs = [] }: Analy
                   <span 
                     className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${
                       type === "detect" ? "bg-amber-500" :
-                      type === "track" ? "bg-teal-500" : "bg-blue-400"
+                      type === "track" ? "bg-teal-500" :
+                      type === "abcde" ? "bg-purple-500" : "bg-blue-400"
                     }`} 
                   />
                   <span className="text-slate-600 leading-snug">
@@ -181,7 +182,7 @@ export function AnalyticsPanel({ analytics, detections, systemLogs = [] }: Analy
           )}
         </CardContent>
       </Card>
-    </aside>
+    </>
   );
 }
 

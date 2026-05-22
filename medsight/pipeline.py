@@ -5,8 +5,11 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from medsight.abcde import ABCDEResult, analyze_abcde
 from medsight.analytics import FrameAnalytics, LesionAnalytics
 from medsight.detection import Detection, LesionDetector
+from medsight.risk import RiskAssessment, classify_risk
+from medsight.segmentation import segment_lesion
 from medsight.tracking import SpatiotemporalTracker
 
 
@@ -31,10 +34,12 @@ class MedSightPipeline:
         temporal_window: int,
         tracker_name: str,
         enable_fp16: bool,
+        enable_abcde: bool = True,
     ) -> None:
         self.detector = detector
         self.tracker_name = tracker_name
         self.enable_fp16 = enable_fp16
+        self.enable_abcde = enable_abcde
         self.tracker = SpatiotemporalTracker(min_persist_frames=temporal_window)
         self.analytics = LesionAnalytics()
 
@@ -54,7 +59,11 @@ class MedSightPipeline:
             detection.confirmed = True
             if detection.confidence >= confidence:
                 confirmed.append(detection)
-        
+
+        # Run ABCDE morphological analysis on each confirmed detection
+        if self.enable_abcde:
+            self._run_abcde(preprocessed, confirmed)
+
         rendered = preprocessed.copy()
         fps = 1000.0 / max(inference.pipeline_ms, 1e-6)
         analytics = FrameAnalytics(
@@ -108,6 +117,11 @@ class MedSightPipeline:
             fps=instant_fps,
         )
         confirmed = [detection for detection in tracked if detection.confirmed and detection.confidence >= confidence]
+
+        # Run ABCDE on confirmed detections (video mode too)
+        if self.enable_abcde:
+            self._run_abcde(preprocessed, confirmed)
+
         rendered = preprocessed.copy()
         pipeline_ms = (time.perf_counter() - start) * 1000.0
         fps = 1000.0 / max(pipeline_ms, 1e-6)
@@ -133,12 +147,41 @@ class MedSightPipeline:
             snapshot_eligible=bool(confirmed),
         )
 
+    # ── ABCDE analysis ───────────────────────────────────
+
+    def _run_abcde(self, frame_rgb: np.ndarray, detections: list[Detection]) -> None:
+        """Run segmentation + ABCDE + risk scoring on each detection.
+
+        This modifies the detection objects in-place, attaching the
+        morphological analysis results directly to each one.
+        """
+        for det in detections:
+            try:
+                lesion_mask = segment_lesion(frame_rgb, det.bbox)
+                if lesion_mask is None:
+                    continue
+
+                det.abcde = analyze_abcde(
+                    frame_rgb=frame_rgb,
+                    mask=lesion_mask.mask,
+                    contour=lesion_mask.contour,
+                )
+                det.risk = classify_risk(det.abcde)
+                det.mask_contour = lesion_mask.contour.tolist()
+            except Exception:
+                # Segmentation or analysis can fail on unusual frames
+                # — that's fine, we just skip that detection's ABCDE
+                continue
+
+    # ── Preprocessing ────────────────────────────────────
+
     def _preprocess(self, frame_rgb: np.ndarray) -> np.ndarray:
         import cv2
+        from medsight.config import CLAHE_CLIP_LIMIT, CLAHE_TILE_GRID
 
         lab = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2LAB)
         l_channel, a_channel, b_channel = cv2.split(lab)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID)
         l_channel = clahe.apply(l_channel)
         enhanced = cv2.merge((l_channel, a_channel, b_channel))
         return cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
@@ -150,6 +193,9 @@ class MedSightPipeline:
                 logs.append(("detect", f"Lesion detected at frame {frame_index} with {detection.confidence:.2f} confidence"))
             if detection.track_id is not None:
                 logs.append(("track", f"ID {detection.track_id} updated ({detection.duration_frames} frames)"))
+            # Log ABCDE results when available
+            if detection.risk is not None:
+                logs.append(("abcde", f"Risk: {detection.risk.level} (score {detection.risk.total_score})"))
         return logs
 
     @staticmethod

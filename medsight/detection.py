@@ -4,9 +4,14 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from medsight.abcde import ABCDEResult
+    from medsight.risk import RiskAssessment
 
 _ULTRALYTICS_CONFIG_DIR = Path(".ultralytics").resolve()
 _ULTRALYTICS_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -25,6 +30,11 @@ class Detection:
     confirmed: bool = False
     duration_frames: int = 1
     duration_seconds: float = 0.0
+
+    # Morphological analysis (populated by the pipeline when enabled)
+    abcde: ABCDEResult | None = None
+    risk: RiskAssessment | None = None
+    mask_contour: list | None = None
 
 
 @dataclass
@@ -53,7 +63,13 @@ class LesionDetector:
         frame_rgb: np.ndarray,
         confidence: float,
         use_fp16: bool = False,
+        imgsz: int | None = None,
+        iou: float | None = None,
+        augment: bool | None = None,
     ) -> InferenceResult:
+        from medsight.config import (
+            DEFAULT_IMGSZ_IMAGE, DEFAULT_IOU_THRESHOLD, DEFAULT_AUGMENT_IMAGE,
+        )
         return self._run_predict(
             mode="predict",
             frame_rgb=frame_rgb,
@@ -61,6 +77,9 @@ class LesionDetector:
             tracker=None,
             persist=False,
             use_fp16=use_fp16,
+            imgsz=imgsz or DEFAULT_IMGSZ_IMAGE,
+            iou=iou or DEFAULT_IOU_THRESHOLD,
+            augment=augment if augment is not None else DEFAULT_AUGMENT_IMAGE,
         )
 
     def track_frame(
@@ -70,7 +89,13 @@ class LesionDetector:
         tracker: str,
         persist: bool = True,
         use_fp16: bool = False,
+        imgsz: int | None = None,
+        iou: float | None = None,
+        augment: bool | None = None,
     ) -> InferenceResult:
+        from medsight.config import (
+            DEFAULT_IMGSZ_VIDEO, DEFAULT_IOU_THRESHOLD, DEFAULT_AUGMENT_VIDEO,
+        )
         return self._run_predict(
             mode="track",
             frame_rgb=frame_rgb,
@@ -78,6 +103,9 @@ class LesionDetector:
             tracker=tracker,
             persist=persist,
             use_fp16=use_fp16,
+            imgsz=imgsz or DEFAULT_IMGSZ_VIDEO,
+            iou=iou or DEFAULT_IOU_THRESHOLD,
+            augment=augment if augment is not None else DEFAULT_AUGMENT_VIDEO,
         )
 
     def render(self, frame_rgb: np.ndarray, detections: list[Detection]) -> np.ndarray:
@@ -133,12 +161,20 @@ class LesionDetector:
         tracker: str | None,
         persist: bool,
         use_fp16: bool,
+        imgsz: int = 640,
+        iou: float = 0.45,
+        augment: bool = False,
     ) -> InferenceResult:
+        from medsight.config import DEFAULT_MAX_DETECTIONS
+
         start = time.perf_counter()
         kwargs = {
             "source": frame_rgb,
             "conf": confidence,
-            "imgsz": 640,
+            "iou": iou,
+            "imgsz": imgsz,
+            "max_det": DEFAULT_MAX_DETECTIONS,
+            "augment": augment,
             "verbose": False,
             "device": self.device,
             "half": bool(use_fp16 and self.fp16_supported),

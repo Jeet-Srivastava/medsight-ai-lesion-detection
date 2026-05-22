@@ -3,8 +3,6 @@
  *
  * All endpoints are prefixed with /api and proxied to the FastAPI
  * server running at http://localhost:8000 (configured in vite.config.ts).
- *
- * Wire these functions to your actual backend routes.
  */
 
 const BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : "https://medsight-backend-0ue8.onrender.com/api");
@@ -85,5 +83,29 @@ export async function updateConfidence(confidence: number) {
     body: JSON.stringify({ confidence }),
   });
   if (!res.ok) throw new Error("Failed to update confidence");
+  return res.json();
+}
+
+/* ── Clinical Report ─────────────────────────────────── */
+
+export async function fetchReport() {
+  const res = await fetch(`${BASE}/report`);
+  if (!res.ok) throw new Error("Failed to fetch report");
+  return res.json();
+}
+
+/* ── XAI Saliency Map ────────────────────────────────── */
+
+export async function fetchSaliencyMap(detectionIndex: number = 0) {
+  const res = await fetch(`${BASE}/xai/saliency?detection_index=${detectionIndex}`);
+  if (!res.ok) throw new Error("Failed to generate saliency map");
+  return res.json();
+}
+
+/* ── Audit Trail ─────────────────────────────────────── */
+
+export async function fetchAuditTrail(limit: number = 50) {
+  const res = await fetch(`${BASE}/audit?limit=${limit}`);
+  if (!res.ok) throw new Error("Failed to fetch audit trail");
   return res.json();
 }
