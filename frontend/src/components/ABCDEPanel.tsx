@@ -18,11 +18,11 @@ const CRITERIA = [
 ] as const;
 
 /* Color for risk level badges */
-const riskColors: Record<string, "teal" | "amber" | "red" | "outline"> = {
+const riskColors: Record<string, "teal" | "warning" | "danger" | "outline"> = {
   Low: "teal",
-  Moderate: "amber",
-  High: "red",
-  Refer: "red",
+  Moderate: "warning",
+  High: "danger",
+  Refer: "danger",
 };
 
 export function ABCDEPanel({ detections }: ABCDEPanelProps) {

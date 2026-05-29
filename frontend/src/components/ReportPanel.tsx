@@ -101,7 +101,7 @@ export function ReportPanel({ report, onGenerateReport, isLoading }: ReportPanel
                         <Badge
                           variant={
                             finding.risk.level === "Low" ? "teal" :
-                            finding.risk.level === "Moderate" ? "amber" : "red"
+                            finding.risk.level === "Moderate" ? "warning" : "danger"
                           }
                         >
                           {finding.risk.level === "High" || finding.risk.level === "Refer" ? (
