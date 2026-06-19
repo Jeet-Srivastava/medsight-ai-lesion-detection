@@ -7,6 +7,5 @@ env/
 runs/
 models/*.pt
 models/*.onnx
-.streamlit/
 uploads/
 .ultralytics/

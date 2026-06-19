@@ -11,33 +11,48 @@ Run: uvicorn api_server:app --reload --port 8000
 from __future__ import annotations
 
 import base64
-import io
+import logging
 import os
 import tempfile
 from pathlib import Path
 
 import cv2
+from dotenv import load_dotenv
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from medsight.audit import AuditLogger
-from medsight.config import DEFAULT_MODEL_PATH, DEFAULT_CONFIDENCE, DEFAULT_TEMPORAL_WINDOW
+from medsight.config import DEFAULT_CONFIDENCE, DEFAULT_TEMPORAL_WINDOW
 from medsight.detection import LesionDetector
 from medsight.explainability import generate_saliency_map, overlay_heatmap
 from medsight.pipeline import MedSightPipeline, PipelineFrameResult
 from medsight.reporting import generate_report, report_to_dict
 
+load_dotenv()
+
 # ── App ──────────────────────────────────────────────────
 
 app = FastAPI(title="MedSight API", version="2.0.0")
 
+_DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://medsight-ai.vercel.app",
+]
+_env_origins = os.environ.get("MEDSIGHT_ALLOWED_ORIGINS")
+_ALLOWED_ORIGINS = (
+    [origin.strip() for origin in _env_origins.split(",") if origin.strip()]
+    if _env_origins
+    else _DEFAULT_ALLOWED_ORIGINS
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # ── Global State ─────────────────────────────────────────
@@ -61,12 +76,27 @@ current_session_id: str = "MS-DEFAULT"
 
 # Audit logger
 audit_logger = AuditLogger()
+logger = logging.getLogger("api_server")
+
+CLINICAL_YOLO_MODEL_PATH = "models/skin_lesion_best.pt"
+FALLBACK_YOLO_MODEL_PATH = "yolo11n.pt"
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 def get_detector() -> LesionDetector:
     global detector
     if detector is None:
-        detector = LesionDetector(DEFAULT_MODEL_PATH)
+        # NOTE: User must download a fine-tuned skin lesion YOLO weight from Roboflow or Kaggle and place it at this path for accurate cropping.
+        model_path = CLINICAL_YOLO_MODEL_PATH
+        if not Path(model_path).exists():
+            logger.warning(
+                "Clinical YOLO model not found at '%s'. Falling back to generic model '%s'. "
+                "Download a fine-tuned skin-lesion model for clinical accuracy.",
+                model_path,
+                FALLBACK_YOLO_MODEL_PATH,
+            )
+            model_path = FALLBACK_YOLO_MODEL_PATH
+        detector = LesionDetector(model_path)
     return detector
 
 
@@ -99,6 +129,40 @@ class SessionUpdate(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────
+
+def decode_image_bytes(contents: bytes) -> np.ndarray:
+    nparr = np.frombuffer(contents, np.uint8)
+    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+    return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+
+
+def analyze_image_bytes(
+    contents: bytes,
+    confidence: float,
+    pipe: MedSightPipeline | None = None,
+    detector_obj: LesionDetector | None = None,
+    audit: bool = True,
+) -> PipelineFrameResult:
+    """Run YOLO detection pipeline on one image."""
+    global current_confidence, last_result, last_frame_rgb
+
+    current_confidence = confidence
+    frame_rgb = decode_image_bytes(contents)
+
+    pipe = pipe or get_pipeline()
+    pipe.reset()
+    result = pipe.process_image(frame_rgb, confidence=confidence)
+
+    last_result = result
+    last_frame_rgb = frame_rgb
+
+    if audit:
+        _log_to_audit(result, frame_rgb)
+
+    return result
+
 
 def encode_frame(frame_rgb: np.ndarray) -> str:
     """Encode an RGB numpy frame to base64 JPEG."""
@@ -184,7 +248,7 @@ def _log_to_audit(result: PipelineFrameResult, frame_rgb: np.ndarray | None) -> 
     audit_logger.log_inference(
         session_id=current_session_id,
         frame_rgb=frame_rgb,
-        model_path=DEFAULT_MODEL_PATH,
+        model_path=CLINICAL_YOLO_MODEL_PATH,
         confidence_threshold=current_confidence,
         detections_count=len(result.raw_detections),
         confirmed_count=len(result.confirmed_detections),
@@ -209,29 +273,20 @@ def get_status():
 @app.post("/api/inference/image")
 async def infer_image(file: UploadFile = File(...), confidence: float = DEFAULT_CONFIDENCE):
     """Run inference on a single uploaded image."""
-    global current_confidence, last_result, last_frame_rgb
-
-    current_confidence = confidence
-
     contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if img_bgr is None:
-        raise HTTPException(status_code=400, detail="Invalid image file")
-
-    frame_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    pipe = get_pipeline()
-    pipe.reset()
-    result = pipe.process_image(frame_rgb, confidence=confidence)
-
-    # Store for report generation and XAI
-    last_result = result
-    last_frame_rgb = frame_rgb
-
-    # Audit trail
-    _log_to_audit(result, frame_rgb)
-
+    if len(contents) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum upload size is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
+    result = analyze_image_bytes(contents, confidence)
     return pipeline_result_to_dict(result)
+
+
+@app.post("/api/analyze")
+async def analyze_image(file: UploadFile = File(...), confidence: float = DEFAULT_CONFIDENCE):
+    """Compatibility endpoint for the complete clinical image pipeline."""
+    return await infer_image(file=file, confidence=confidence)
 
 
 @app.post("/api/inference/video")
@@ -428,7 +483,7 @@ def get_report():
         frame_rgb=last_frame_rgb,
         session_id=current_session_id,
         model_name="YOLO11",
-        model_path=DEFAULT_MODEL_PATH,
+        model_path=CLINICAL_YOLO_MODEL_PATH,
         confidence_threshold=current_confidence,
     )
 

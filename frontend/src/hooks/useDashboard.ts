@@ -34,11 +34,13 @@ export function useDashboard() {
   const [frameUrl, setFrameUrl] = useState<string | null>(null);
   const [detections, setDetections] = useState<Detection[]>([]);
   const [analytics, setAnalytics] = useState<FrameAnalytics | null>(null);
+
   const [streamState, setStreamState] = useState<StreamState>("idle");
   const [confidence, setConfidence] = useState(0.35);
   const [frameWidth, setFrameWidth] = useState(640);
   const [frameHeight, setFrameHeight] = useState(480);
   const [systemLogs, setSystemLogs] = useState<Array<[string, string]>>([]);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Report & XAI state
   const [report, setReport] = useState<ClinicalReport | null>(null);
@@ -51,6 +53,7 @@ export function useDashboard() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const captureRef = useRef<number | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   // ── Fetch system status on mount ────────────────────
   useEffect(() => {
@@ -64,6 +67,30 @@ export function useDashboard() {
 
   // ── Handlers ────────────────────────────────────────
 
+  const revokeFrameObjectUrl = useCallback(() => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  }, []);
+
+  const showLocalImage = useCallback(
+    (file: File) => {
+      revokeFrameObjectUrl();
+      const url = URL.createObjectURL(file);
+      objectUrlRef.current = url;
+      setFrameUrl(url);
+
+      const img = new Image();
+      img.onload = () => {
+        setFrameWidth(img.naturalWidth);
+        setFrameHeight(img.naturalHeight);
+      };
+      img.src = url;
+    },
+    [revokeFrameObjectUrl]
+  );
+
   const applyResult = useCallback((result: PipelineResult | { status: string }) => {
     if ("status" in result && result.status === "stopped") return;
     const pResult = result as PipelineResult;
@@ -73,6 +100,7 @@ export function useDashboard() {
       setSystemLogs((prev) => [...prev, ...pResult.logs].slice(-200));
     }
     if (pResult.annotated_frame_b64) {
+      revokeFrameObjectUrl();
       setFrameUrl(`data:image/jpeg;base64,${pResult.annotated_frame_b64}`);
     }
     if (pResult.frame_width && pResult.frame_height) {
@@ -82,54 +110,85 @@ export function useDashboard() {
     // Clear stale report when new inference arrives
     setReport(null);
     setSaliencyUrl(null);
-  }, []);
+    setErrorMessage(null);
+  }, [revokeFrameObjectUrl]);
 
   const handleUploadImage = useCallback(
     async (file: File) => {
       setStreamState("processing");
+      setErrorMessage(null);
       try {
         const result = await api.uploadImageForInference(file, confidence);
 
-        // If backend returns the result directly
         if (result.analytics) {
           applyResult(result);
         } else {
-          // Fallback: show the uploaded image directly
-          const url = URL.createObjectURL(file);
-          setFrameUrl(url);
+          showLocalImage(file);
         }
 
-        // Load image dimensions
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.onload = () => {
-          setFrameWidth(img.naturalWidth);
-          setFrameHeight(img.naturalHeight);
-        };
-        img.src = url;
-
         setSystemStatus((prev) => ({ ...prev, status: "active" }));
-      } catch {
-        // Demo fallback: show uploaded image even without backend
-        const url = URL.createObjectURL(file);
-        setFrameUrl(url);
-        const img = new Image();
-        img.onload = () => {
-          setFrameWidth(img.naturalWidth);
-          setFrameHeight(img.naturalHeight);
-        };
-        img.src = url;
-        setSystemStatus((prev) => ({ ...prev, status: "active" }));
-
-        // Demo detections for visual testing
-        setDetections(generateDemoDetections());
-        setAnalytics(generateDemoAnalytics());
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Analysis failed";
+        setErrorMessage(message);
+        setSystemLogs((prev) => {
+          const next: Array<[string, string]> = [...prev, ["warn", message]];
+          return next.slice(-200);
+        });
+        showLocalImage(file);
+        setDetections([]);
+        setAnalytics(null);
       } finally {
         setStreamState("idle");
       }
     },
-    [confidence, applyResult, frameUrl]
+    [confidence, applyResult, showLocalImage]
   );
+
+  const startClientCapture = useCallback(() => {
+    const canvasEl = document.createElement("canvas");
+    const canvasCtx = canvasEl.getContext("2d");
+    const isSending = { value: false };
+
+    const captureLoop = async () => {
+      try {
+        const v = videoElRef.current;
+        if (!v || v.readyState < 2) return;
+        if (isSending.value) return;
+
+        const desiredW = 480;
+        const srcW = v.videoWidth || frameWidth;
+        const srcH = v.videoHeight || frameHeight;
+        const aspect = srcW && srcH ? srcW / srcH : frameWidth / frameHeight;
+        const w = Math.min(desiredW, srcW || desiredW);
+        const h = Math.max(1, Math.round(w / aspect));
+
+        canvasEl.width = w;
+        canvasEl.height = h;
+        if (!canvasCtx) return;
+        canvasCtx.drawImage(v, 0, 0, w, h);
+
+        const blob: Blob | null = await new Promise((resolve) =>
+          canvasEl.toBlob((b) => resolve(b), "image/jpeg", 0.6)
+        );
+        if (!blob) return;
+
+        isSending.value = true;
+        try {
+          const result = await api.sendClientFrame(blob, confidence);
+          applyResult(result);
+        } catch {
+          /* ignore per-frame errors */
+        } finally {
+          isSending.value = false;
+        }
+      } catch {
+        /* ignore capture errors */
+      }
+    };
+
+    if (captureRef.current) clearInterval(captureRef.current);
+    captureRef.current = window.setInterval(captureLoop, 120);
+  }, [applyResult, confidence, frameHeight, frameWidth]);
 
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -184,51 +243,7 @@ export function useDashboard() {
       setStreamState("streaming");
       setSystemStatus((prev) => ({ ...prev, status: "active" }));
 
-      // Capture frames and POST to backend (reuses canvas, reduces resolution, backpressure)
-      const canvasEl = document.createElement("canvas");
-      const canvasCtx = canvasEl.getContext("2d");
-      const isSending = { value: false };
-
-      const captureLoop = async () => {
-        try {
-          const v = videoElRef.current;
-          if (!v || v.readyState < 2) return;
-          if (isSending.value) return;
-
-          const desiredW = 480;
-          const srcW = v.videoWidth || frameWidth;
-          const srcH = v.videoHeight || frameHeight;
-          const aspect = srcW && srcH ? srcW / srcH : (frameWidth / frameHeight);
-          const w = Math.min(desiredW, srcW || desiredW);
-          const h = Math.max(1, Math.round(w / aspect));
-
-          canvasEl.width = w;
-          canvasEl.height = h;
-          if (!canvasCtx) return;
-          canvasCtx.drawImage(v, 0, 0, w, h);
-
-          const blob: Blob | null = await new Promise((resolve) =>
-            canvasEl.toBlob((b) => resolve(b), "image/jpeg", 0.6)
-          );
-          if (!blob) return;
-
-          isSending.value = true;
-          try {
-            const result = await api.sendClientFrame(blob, confidence);
-            applyResult(result);
-          } catch {
-            /* ignore per-frame errors */
-          } finally {
-            isSending.value = false;
-          }
-        } catch {
-          /* ignore capture errors */
-        }
-      };
-
-      // Run capture at ~120ms intervals (but skip if previous still sending)
-      if (captureRef.current) clearInterval(captureRef.current as number);
-      captureRef.current = window.setInterval(captureLoop, 120);
+      startClientCapture();
     } catch {
       // Fallback: ask backend to use server webcam (existing behavior)
       try {
@@ -242,7 +257,7 @@ export function useDashboard() {
         setSystemStatus((prev) => ({ ...prev, status: "active" }));
       }
     }
-  }, [confidence, frameWidth, frameHeight, startPolling, applyResult]);
+  }, [confidence, startPolling, startClientCapture]);
 
   const handleStopStream = useCallback(async () => {
     // Stop any client-side capture
@@ -274,12 +289,20 @@ export function useDashboard() {
     if (streamState === "streaming") {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
+      if (captureRef.current) {
+        clearInterval(captureRef.current);
+        captureRef.current = null;
+      }
       setStreamState("paused");
     } else if (streamState === "paused") {
       setStreamState("streaming");
-      startPolling();
+      if (mediaStreamRef.current && videoElRef.current) {
+        startClientCapture();
+      } else {
+        startPolling();
+      }
     }
-  }, [streamState, startPolling]);
+  }, [streamState, startPolling, startClientCapture]);
 
   const handleConfidenceChange = useCallback((val: number) => {
     setConfidence(val);
@@ -317,8 +340,13 @@ export function useDashboard() {
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (captureRef.current) clearInterval(captureRef.current);
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      revokeFrameObjectUrl();
     };
-  }, []);
+  }, [revokeFrameObjectUrl]);
 
   return {
     systemStatus,
@@ -331,6 +359,7 @@ export function useDashboard() {
     frameWidth,
     frameHeight,
     systemLogs,
+    errorMessage,
     report,
     reportLoading,
     saliencyUrl,
@@ -342,6 +371,7 @@ export function useDashboard() {
     handleConfidenceChange,
     handleGenerateReport,
     handleFetchSaliency,
+    setErrorMessage,
   };
 }
 
@@ -354,55 +384,4 @@ function generateSessionId(): string {
     id += chars[Math.floor(Math.random() * chars.length)];
   }
   return `MS-${id.slice(0, 4)}-${id.slice(4)}`;
-}
-
-function generateDemoDetections(): Detection[] {
-  return [
-    {
-      class_id: 0,
-      class_name: "lesion",
-      confidence: 0.92,
-      bbox: [180, 140, 310, 260],
-      track_id: 1,
-      confirmed: true,
-      duration_frames: 12,
-      duration_seconds: 0.4,
-    },
-    {
-      class_id: 0,
-      class_name: "lesion",
-      confidence: 0.74,
-      bbox: [400, 200, 490, 300],
-      track_id: 2,
-      confirmed: true,
-      duration_frames: 5,
-      duration_seconds: 0.17,
-    },
-    {
-      class_id: 0,
-      class_name: "lesion",
-      confidence: 0.58,
-      bbox: [100, 320, 170, 390],
-      track_id: 3,
-      confirmed: true,
-      duration_frames: 3,
-      duration_seconds: 0.1,
-    },
-  ];
-}
-
-function generateDemoAnalytics(): FrameAnalytics {
-  return {
-    frame_index: 1,
-    total_frames: 1,
-    raw_detections: 5,
-    confirmed_detections: 3,
-    total_confirmed_lesions: 3,
-    active_lesions: 3,
-    average_confidence: 0.747,
-    detection_frequency: 3.0,
-    inference_ms: 42.3,
-    pipeline_ms: 67.8,
-    fps: 14.7,
-  };
 }

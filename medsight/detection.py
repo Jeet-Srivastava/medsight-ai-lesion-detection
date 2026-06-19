@@ -219,3 +219,4 @@ class LesionDetector:
                 )
             )
         return detections
+

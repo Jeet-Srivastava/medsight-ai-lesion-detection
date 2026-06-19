@@ -64,7 +64,7 @@ class MedSightPipeline:
         if self.enable_abcde:
             self._run_abcde(preprocessed, confirmed)
 
-        rendered = preprocessed.copy()
+        rendered = self.detector.render(preprocessed, confirmed)
         fps = 1000.0 / max(inference.pipeline_ms, 1e-6)
         analytics = FrameAnalytics(
             frame_index=1,
@@ -122,7 +122,7 @@ class MedSightPipeline:
         if self.enable_abcde:
             self._run_abcde(preprocessed, confirmed)
 
-        rendered = preprocessed.copy()
+        rendered = self.detector.render(preprocessed, confirmed)
         pipeline_ms = (time.perf_counter() - start) * 1000.0
         fps = 1000.0 / max(pipeline_ms, 1e-6)
         analytics = self.analytics.record(

@@ -57,10 +57,9 @@ DEFAULT_AUGMENT_VIDEO = False
 
 # Temporal confirmation — how many consecutive frames a
 #   detection must persist before being marked "confirmed".
-#   Higher = fewer false positives in video, but slower to confirm.
 DEFAULT_TEMPORAL_WINDOW = 3
-
 # ── Preprocessing (CLAHE) ────────────────────────────────
+
 #   CLAHE enhances local contrast in the image, making subtle
 #   lesion boundaries more visible to the model.
 

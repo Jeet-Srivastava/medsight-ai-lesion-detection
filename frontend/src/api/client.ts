@@ -6,12 +6,31 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "/api" : "https://medsight-backend-0ue8.onrender.com/api");
+console.log(BASE);
+
+async function extractErrorMessage(
+  res: Response,
+  fallback: string
+): Promise<string> {
+  try {
+    const body = await res.json();
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 /* ── System ──────────────────────────────────────────── */
 
 export async function fetchSystemStatus() {
   const res = await fetch(`${BASE}/status`);
-  if (!res.ok) throw new Error("Failed to fetch system status");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to fetch system status");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -28,7 +47,10 @@ export async function uploadImageForInference(
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Image inference failed");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Image inference failed");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -45,7 +67,10 @@ export async function uploadVideoForInference(
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Video upload failed");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Video upload failed");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -57,20 +82,29 @@ export async function startStream(confidence: number) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confidence }),
   });
-  if (!res.ok) throw new Error("Failed to start stream");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to start stream");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
 export async function stopStream() {
   const res = await fetch(`${BASE}/stream/stop`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to stop stream");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to stop stream");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
 export async function fetchStreamFrame() {
   const res = await fetch(`${BASE}/stream/frame`);
   if (res.status === 410) throw new Error("Stream ended");
-  if (!res.ok) throw new Error("Failed to fetch stream frame");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to fetch stream frame");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -82,7 +116,10 @@ export async function sendClientFrame(blob: Blob, confidence: number) {
     method: "POST",
     body: formData,
   });
-  if (!res.ok) throw new Error("Failed to send client frame");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to send client frame");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -94,7 +131,10 @@ export async function updateConfidence(confidence: number) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confidence }),
   });
-  if (!res.ok) throw new Error("Failed to update confidence");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to update confidence");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -102,7 +142,10 @@ export async function updateConfidence(confidence: number) {
 
 export async function fetchReport() {
   const res = await fetch(`${BASE}/report`);
-  if (!res.ok) throw new Error("Failed to fetch report");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to fetch report");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -110,7 +153,10 @@ export async function fetchReport() {
 
 export async function fetchSaliencyMap(detectionIndex: number = 0) {
   const res = await fetch(`${BASE}/xai/saliency?detection_index=${detectionIndex}`);
-  if (!res.ok) throw new Error("Failed to generate saliency map");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to generate saliency map");
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -118,6 +164,9 @@ export async function fetchSaliencyMap(detectionIndex: number = 0) {
 
 export async function fetchAuditTrail(limit: number = 50) {
   const res = await fetch(`${BASE}/audit?limit=${limit}`);
-  if (!res.ok) throw new Error("Failed to fetch audit trail");
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res, "Failed to fetch audit trail");
+    throw new Error(msg);
+  }
   return res.json();
 }
