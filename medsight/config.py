@@ -66,11 +66,9 @@ DEFAULT_TEMPORAL_WINDOW = 3
 CLAHE_CLIP_LIMIT = 2.5        # contrast amplification limit (was 2.0)
 CLAHE_TILE_GRID = (8, 8)      # grid size for local histogram equalization
 
-# ── Segmentation (GrabCut) ───────────────────────────────
+# ── Segmentation (MobileSAM) ─────────────────────────────
 
-GRABCUT_ITERATIONS = 7        # more iterations = tighter mask (was 5)
-GRABCUT_MARGIN_PX = 8         # padding around bbox before segmenting (was 5)
-GRABCUT_MIN_AREA_PX = 50      # minimum mask area to be considered valid
+SAM_MIN_AREA_PX = 50          # minimum mask area to be considered valid
 
 # ── ABCDE Scoring ────────────────────────────────────────
 
